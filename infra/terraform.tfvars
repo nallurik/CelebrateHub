@@ -1,0 +1,5 @@
+aws_region  = "us-east-1"
+app_name    = "celebratehub"
+environment = "prod"
+db_username = "celebratehub"
+# db_password = "CHANGE_ME_BEFORE_DEPLOY"   # pass via: terraform apply -var="db_password=YourSecurePass123!"
