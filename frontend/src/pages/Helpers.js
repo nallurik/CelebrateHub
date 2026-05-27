@@ -3,10 +3,11 @@ import { api } from '../api';
 import { useToast } from '../context/ToastContext';
 import ConfirmModal from '../components/ConfirmModal';
 import CustomSelect from '../components/CustomSelect';
+import MultiSelect from '../components/MultiSelect';
 import Pagination from '../components/Pagination';
 import { exportExcel } from '../utils/exportCsv';
 
-const EMPTY = { firstName: '', lastName: '', phone: '', role: '', category: '', password: '', active: true };
+const EMPTY = { firstName: '', lastName: '', phone: '', role: '', category: '', categories: '', password: '', active: true };
 const CATEGORIES = ['TRANSPORT', 'ACCOMMODATION', 'COOKING', 'SERVING'];
 const ROLE_MAP = {
   TRANSPORT: ['Driver', 'Coordinator', 'Navigator', 'Helper', 'Other'],
@@ -34,22 +35,30 @@ export default function Helpers() {
   const load = () => api.getHelpers().then(setHelpers).catch((err) => addToast(err.message)).finally(() => setLoading(false));
   useEffect(() => { load(); }, []);
 
+  const [phoneError, setPhoneError] = useState('');
+
   const set = (field) => (e) => {
-    const val = e.target.value;
-    if (field === 'category') {
-      const newRoles = ROLE_MAP[val] || [];
-      setForm((prev) => ({
-        ...prev,
-        category: val,
-        role: newRoles.includes(prev.role) ? prev.role : '',
-      }));
-    } else {
-      setForm((prev) => ({ ...prev, [field]: val }));
-    }
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const toggleCategory = (cat) => {
+    setForm((prev) => {
+      const current = prev.categories ? prev.categories.split(',').map(c => c.trim()).filter(Boolean) : [];
+      const updated = current.includes(cat) ? current.filter(c => c !== cat) : [...current, cat];
+      return { ...prev, categories: updated.join(','), category: updated[0] || '' };
+    });
+  };
+
+  const handlePhoneChange = (e) => {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setForm((prev) => ({ ...prev, phone: val }));
+    if (val.length > 0 && val.length < 10) setPhoneError('Phone must be 10 digits');
+    else setPhoneError('');
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (form.phone && form.phone.length !== 10) { setPhoneError('Phone must be exactly 10 digits'); return; }
     try {
       if (editing) {
         await api.updateHelper(editing.id, form);
@@ -66,7 +75,8 @@ export default function Helpers() {
 
   const handleEdit = (h) => {
     setEditing(h);
-    setForm({ firstName: h.firstName || '', lastName: h.lastName || '', phone: h.phone || '', role: h.role || '', category: h.category || '', password: '', active: h.active !== false });
+    setForm({ firstName: h.firstName || '', lastName: h.lastName || '', phone: h.phone || '', role: h.role || '', category: h.category || '', categories: h.categories || h.category || '', password: '', active: h.active !== false });
+    setPhoneError('');
     setShowForm(true);
   };
 
@@ -90,21 +100,23 @@ export default function Helpers() {
   const handleCancel = () => {
     setEditing(null);
     setForm(EMPTY);
+    setPhoneError('');
     setShowForm(false);
   };
 
-  // Stats by category
+  // Stats by category (count helpers that include each category)
   const catCounts = {};
   helpers.forEach((h) => {
-    const cat = h.category || 'OTHER';
-    catCounts[cat] = (catCounts[cat] || 0) + 1;
+    const cats = h.categories ? h.categories.split(',').map(c => c.trim()).filter(Boolean) : (h.category ? [h.category] : []);
+    cats.forEach(cat => { catCounts[cat] = (catCounts[cat] || 0) + 1; });
   });
 
   // Filtered list
   const filtered = helpers.filter((h) => {
     const q = search.toLowerCase();
-    const matchesSearch = !q || `${h.firstName} ${h.lastName} ${h.phone || ''} ${h.role || ''} ${h.category || ''}`.toLowerCase().includes(q);
-    const matchesCat = catFilter === 'ALL' || h.category === catFilter;
+    const matchesSearch = !q || `${h.firstName} ${h.lastName} ${h.phone || ''} ${h.role || ''} ${h.categories || h.category || ''}`.toLowerCase().includes(q);
+    const hCats = h.categories ? h.categories.split(',').map(c => c.trim()) : [h.category];
+    const matchesCat = catFilter === 'ALL' || hCats.includes(catFilter);
     return matchesSearch && matchesCat;
   });
 
@@ -148,30 +160,38 @@ export default function Helpers() {
           <h3>{editing ? '✏️ Edit Crew Member' : '🆕 New Crew Member'}</h3>
           <form onSubmit={handleSave} style={{ marginTop: 12 }}>
             <div className="form-row">
-              <label>First Name <input value={form.firstName} onChange={set('firstName')} required placeholder="e.g. Ramesh" /></label>
-              <label>Last Name <input value={form.lastName} onChange={set('lastName')} required placeholder="e.g. Kumar" /></label>
-              <label>Phone <input value={form.phone} onChange={set('phone')} required placeholder="Required" /></label>
+              <label><span>First Name <span className="required">*</span></span><input value={form.firstName} onChange={set('firstName')} required placeholder="e.g. Ramesh" /></label>
+              <label><span>Last Name <span className="required">*</span></span><input value={form.lastName} onChange={set('lastName')} required placeholder="e.g. Kumar" /></label>
+              <label><span>Phone <span className="required">*</span></span>
+                <input value={form.phone} onChange={handlePhoneChange} required placeholder="10 digits" inputMode="numeric" maxLength={10} />
+                {phoneError && <span className="phone-hint" style={{ color: 'var(--danger)' }}>{phoneError}</span>}
+                {!phoneError && <span className="phone-hint">Digits only, max 10</span>}
+              </label>
             </div>
             <div className="form-row">
-              <label>Category
-                <CustomSelect
-                  value={form.category}
-                  onChange={set('category')}
-                  options={CATEGORIES.map((c) => ({ value: c, label: CAT_LABELS[c] }))}
-                  placeholder="Select category"
-                  required
+              <label><span>Categories <span className="required">*</span></span>
+                <MultiSelect
+                  values={(form.categories || '').split(',').map(c => c.trim()).filter(Boolean)}
+                  onChange={(vals) => setForm(prev => ({ ...prev, categories: vals.join(','), category: vals[0] || '' }))}
+                  options={CATEGORIES.map(cat => ({ value: cat, label: `${CAT_ICONS[cat]} ${CAT_LABELS[cat]}` }))}
+                  placeholder="Select categories..."
                 />
+                {!form.categories && <span className="phone-hint" style={{ color: 'var(--danger)' }}>Select at least one category</span>}
               </label>
-              <label>Role
-                <CustomSelect
+              <label><span>Role / Title <span className="required">*</span></span>
+                <input
                   value={form.role}
                   onChange={set('role')}
-                  options={(ROLE_MAP[form.category] || []).map((r) => ({ value: r, label: r }))}
-                  placeholder={form.category ? 'Select role' : 'Select category first'}
-                  disabled={!form.category}
+                  required
+                  placeholder="e.g. Driver, Head Cook"
+                  list="role-suggestions"
                 />
+                <datalist id="role-suggestions">
+                  {[...new Set((form.categories || '').split(',').flatMap(c => ROLE_MAP[c.trim()] || []))].map(r => <option key={r} value={r} />)}
+                </datalist>
+                <span className="phone-hint">You can type or pick from suggestions</span>
               </label>
-              <label>Password <input type="password" value={form.password} onChange={set('password')} placeholder={editing ? 'Leave blank to keep' : 'Login password'} {...(!editing ? { required: true } : {})} /></label>
+              <label><span>Password {!editing && <span className="required">*</span>}</span><input type="password" value={form.password} onChange={set('password')} placeholder={editing ? 'Leave blank to keep' : 'Login password'} {...(!editing ? { required: true } : {})} /></label>
               <label className="check-label" style={{ alignSelf: 'center', marginTop: 20 }}><input type="checkbox" checked={form.active} onChange={(e) => setForm((p) => ({ ...p, active: e.target.checked }))} /> Active</label>
             </div>
             <div className="form-actions">
@@ -207,7 +227,7 @@ export default function Helpers() {
         <button className="btn btn-export" onClick={() => exportExcel('crew.xlsx', [
           { label: 'First Name', key: 'firstName', width: 16 },
           { label: 'Last Name', key: 'lastName', width: 16 },
-          { label: 'Category', key: (h) => CAT_LABELS[h.category] || h.category || '' },
+          { label: 'Categories', key: (h) => (h.categories || h.category || '').split(',').map(c => CAT_LABELS[c.trim()] || c.trim()).join(' / ') },
           { label: 'Role', key: 'role' },
           { label: 'Phone', key: 'phone', width: 16 },
         ], filtered, { title: 'Event Crew', sheetName: 'Crew' })} disabled={filtered.length === 0}>
@@ -257,11 +277,12 @@ export default function Helpers() {
                       </div>
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {h.category ? (
-                        <span className="badge">{CAT_ICONS[h.category] || '📋'} {CAT_LABELS[h.category] || h.category}</span>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
+                      {(() => {
+                        const cats = h.categories ? h.categories.split(',').map(c => c.trim()).filter(Boolean) : (h.category ? [h.category] : []);
+                        return cats.length > 0
+                          ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{cats.map(c => <span key={c} className="badge">{CAT_ICONS[c] || '📋'} {CAT_LABELS[c] || c}</span>)}</span>
+                          : <span className="muted">—</span>;
+                      })()}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {h.role ? <span className="badge badge-role">{h.role}</span> : <span className="muted">—</span>}
@@ -296,9 +317,14 @@ export default function Helpers() {
                             <div className="guest-detail-section">
                               <h4>🏷️ Assignment</h4>
                               <div className="guest-detail-field">
-                                <span className="guest-detail-label">Category</span>
+                                <span className="guest-detail-label">Categories</span>
                                 <span className="guest-detail-value">
-                                  {h.category ? `${CAT_ICONS[h.category] || ''} ${CAT_LABELS[h.category] || h.category}` : '—'}
+                                  {(() => {
+                                    const cats = h.categories ? h.categories.split(',').map(c => c.trim()).filter(Boolean) : (h.category ? [h.category] : []);
+                                    return cats.length > 0
+                                      ? cats.map(c => `${CAT_ICONS[c] || ''} ${CAT_LABELS[c] || c}`).join(' · ')
+                                      : '—';
+                                  })()}
                                 </span>
                               </div>
                               <div className="guest-detail-field">

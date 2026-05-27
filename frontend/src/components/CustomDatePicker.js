@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 
-export default function CustomDatePicker({ value, onChange, name, placeholder, required }) {
+export default function CustomDatePicker({ value, onChange, name, placeholder, required, min, max }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 300 });
   const ref = useRef(null);
@@ -107,6 +107,14 @@ export default function CustomDatePicker({ value, onChange, name, placeholder, r
   const isToday = (day) => {
     return displayYear === today.getFullYear() && displayMonth === today.getMonth() && day === today.getDate();
   };
+  const isDisabled = (day) => {
+    const m = String(displayMonth + 1).padStart(2, '0');
+    const d = String(day).padStart(2, '0');
+    const dateStr = `${displayYear}-${m}-${d}`;
+    if (min && dateStr < min) return true;
+    if (max && dateStr > max) return true;
+    return false;
+  };
 
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const years = [];
@@ -161,7 +169,8 @@ export default function CustomDatePicker({ value, onChange, name, placeholder, r
           <div className="cdp-days">
             {days.map((d, i) => d ? (
               <button key={i} type="button"
-                className={`cdp-day${isSelected(d) ? ' cdp-day--selected' : ''}${isToday(d) ? ' cdp-day--today' : ''}`}
+                className={`cdp-day${isSelected(d) ? ' cdp-day--selected' : ''}${isToday(d) ? ' cdp-day--today' : ''}${isDisabled(d) ? ' cdp-day--disabled' : ''}`}
+                disabled={isDisabled(d)}
                 onClick={() => selectDate(d)}>{d}</button>
             ) : <span key={i} className="cdp-day--empty" />)}
           </div>

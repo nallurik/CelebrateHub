@@ -23,7 +23,10 @@ public class Helper {
 
     private String role;
 
-    private String category; // TRANSPORT, ACCOMMODATION, COOKING, SERVING
+    private String category; // primary category (first of categories)
+
+    @Column(length = 500)
+    private String categories; // comma-separated: "TRANSPORT,COOKING"
 
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
@@ -52,6 +55,15 @@ public class Helper {
 
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
+
+    public String getCategories() { return categories; }
+    public void setCategories(String categories) {
+        this.categories = categories;
+        // keep primary category in sync
+        if (categories != null && !categories.isEmpty()) {
+            this.category = categories.split(",")[0].trim();
+        }
+    }
 
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }

@@ -36,6 +36,12 @@ public class EventGuest {
     private String pickupDate;
     private String pickupTime;
     private int transportPeopleCount;
+    private String transportStartDate;
+    private String transportEndDate;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean pickupTaskComplete;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean dropTaskComplete;
 
     // ACCOMMODATION
     private boolean needsAccommodation;
@@ -43,6 +49,18 @@ public class EventGuest {
     private String accommodationToDate;
     private Long accommodationPlaceId;
     private String accommodationPlaceName;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean accommodationTaskComplete;
+
+    // ATTENDANCE
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean attended;
+
+    // INVITATION
+    @Column(length = 20, columnDefinition = "varchar(20) default 'PENDING'")
+    private String invitationStatus = "PENDING";
+    @Column(length = 500)
+    private String invitationNotes;
 
     // HELPER ASSIGNMENTS (by category)
     private Long transportHelperId;
@@ -95,6 +113,18 @@ public class EventGuest {
     public int getTransportPeopleCount() { return transportPeopleCount; }
     public void setTransportPeopleCount(int transportPeopleCount) { this.transportPeopleCount = transportPeopleCount; }
 
+    public String getTransportStartDate() { return transportStartDate; }
+    public void setTransportStartDate(String transportStartDate) { this.transportStartDate = transportStartDate; }
+
+    public String getTransportEndDate() { return transportEndDate; }
+    public void setTransportEndDate(String transportEndDate) { this.transportEndDate = transportEndDate; }
+
+    public boolean isPickupTaskComplete() { return pickupTaskComplete; }
+    public void setPickupTaskComplete(boolean pickupTaskComplete) { this.pickupTaskComplete = pickupTaskComplete; }
+
+    public boolean isDropTaskComplete() { return dropTaskComplete; }
+    public void setDropTaskComplete(boolean dropTaskComplete) { this.dropTaskComplete = dropTaskComplete; }
+
     public boolean isNeedsAccommodation() { return needsAccommodation; }
     public void setNeedsAccommodation(boolean needsAccommodation) { this.needsAccommodation = needsAccommodation; }
 
@@ -109,6 +139,18 @@ public class EventGuest {
 
     public String getAccommodationPlaceName() { return accommodationPlaceName; }
     public void setAccommodationPlaceName(String accommodationPlaceName) { this.accommodationPlaceName = accommodationPlaceName; }
+
+    public boolean isAccommodationTaskComplete() { return accommodationTaskComplete; }
+    public void setAccommodationTaskComplete(boolean accommodationTaskComplete) { this.accommodationTaskComplete = accommodationTaskComplete; }
+
+    public boolean isAttended() { return attended; }
+    public void setAttended(boolean attended) { this.attended = attended; }
+
+    public String getInvitationStatus() { return invitationStatus != null ? invitationStatus : "PENDING"; }
+    public void setInvitationStatus(String invitationStatus) { this.invitationStatus = invitationStatus; }
+
+    public String getInvitationNotes() { return invitationNotes; }
+    public void setInvitationNotes(String invitationNotes) { this.invitationNotes = invitationNotes; }
 
     public Long getTransportHelperId() { return transportHelperId; }
     public void setTransportHelperId(Long transportHelperId) { this.transportHelperId = transportHelperId; }

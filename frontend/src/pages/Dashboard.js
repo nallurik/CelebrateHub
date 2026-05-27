@@ -298,7 +298,8 @@ export default function Dashboard() {
                 {(ev.schedules || []).length > 0 && <span className="badge">📋 {(ev.schedules || []).length} schedule</span>}
               </div>
               <div className="card-actions">
-                <Link to={`/events/${ev.id}`} className="btn btn-primary btn-sm">Manage</Link>
+                <Link to={`/events/${ev.id}`} className="btn btn-primary btn-sm">🎯 Manage Event</Link>
+                <Link to={`/events`} className="btn btn-sm">📋 All Events</Link>
                 <button className="btn btn-sm" onClick={() => {
                   setCloneName(ev.name + ' (Copy)');
                   setCloneGuests(true);

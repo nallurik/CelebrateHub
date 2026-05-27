@@ -1,15 +1,27 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 
-export default function CustomSelect({ value, onChange, options, placeholder, required, name, disabled }) {
+export default function CustomSelect({ value, onChange, options, placeholder, required, name, disabled, searchable }) {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState({});
+  const [search, setSearch] = useState('');
   const ref = useRef(null);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
+  const searchRef = useRef(null);
+
+  // Auto-enable search when options > 8
+  const isSearchable = searchable || options.length > 8;
 
   const selected = options.find((o) => (typeof o === 'string' ? o : o.value) === value);
   const label = selected ? (typeof selected === 'string' ? selected : selected.label) : null;
+
+  const filteredOptions = isSearchable && search
+    ? options.filter((o) => {
+        const lbl = typeof o === 'string' ? o : o.label;
+        return lbl.toLowerCase().includes(search.toLowerCase());
+      })
+    : options;
 
   const positionMenu = useCallback(() => {
     if (!triggerRef.current) return;
@@ -27,6 +39,7 @@ export default function CustomSelect({ value, onChange, options, placeholder, re
       if (ref.current && !ref.current.contains(e.target) &&
           menuRef.current && !menuRef.current.contains(e.target)) {
         setOpen(false);
+        setSearch('');
       }
     };
     document.addEventListener('mousedown', close);
@@ -36,6 +49,9 @@ export default function CustomSelect({ value, onChange, options, placeholder, re
   useEffect(() => {
     if (!open) return;
     positionMenu();
+    if (isSearchable && searchRef.current) {
+      setTimeout(() => searchRef.current?.focus(), 10);
+    }
     const onScroll = () => positionMenu();
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', onScroll);
@@ -43,34 +59,51 @@ export default function CustomSelect({ value, onChange, options, placeholder, re
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onScroll);
     };
-  }, [open, positionMenu]);
+  }, [open, positionMenu, isSearchable]);
 
   const handleSelect = (val) => {
     onChange({ target: { value: val, name } });
     setOpen(false);
+    setSearch('');
   };
 
   const menu = open ? ReactDOM.createPortal(
-    <ul className="cselect-menu" ref={menuRef} style={menuStyle}>
-      {placeholder && (
-        <li className="cselect-option cselect-option--disabled">{placeholder}</li>
+    <div className="cselect-menu" ref={menuRef} style={{ ...menuStyle, padding: 0 }}>
+      {isSearchable && (
+        <input
+          ref={searchRef}
+          className="cselect-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="🔍 Search..."
+          onClick={(e) => e.stopPropagation()}
+        />
       )}
-      {options.map((opt) => {
-        const val = typeof opt === 'string' ? opt : opt.value;
-        const lbl = typeof opt === 'string' ? opt : opt.label;
-        const isActive = val === value;
-        return (
-          <li
-            key={val}
-            className={`cselect-option ${isActive ? 'cselect-option--active' : ''}`}
-            onClick={() => handleSelect(val)}
-          >
-            <span>{lbl}</span>
-            {isActive && <span className="cselect-check">✓</span>}
-          </li>
-        );
-      })}
-    </ul>,
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+        {!isSearchable && placeholder && (
+          <li className="cselect-option cselect-option--disabled">{placeholder}</li>
+        )}
+        {filteredOptions.length === 0 && (
+          <li className="cselect-option cselect-option--disabled">No results</li>
+        )}
+        {filteredOptions.map((opt) => {
+          const val = typeof opt === 'string' ? opt : opt.value;
+          const lbl = typeof opt === 'string' ? opt : opt.label;
+          const isActive = val === value;
+          const isDisabled = opt.disabled;
+          return (
+            <li
+              key={val}
+              className={`cselect-option ${isActive ? 'cselect-option--active' : ''} ${isDisabled ? 'cselect-option--disabled' : ''}`}
+              onClick={() => !isDisabled && handleSelect(val)}
+            >
+              <span>{lbl}</span>
+              {isActive && <span className="cselect-check">✓</span>}
+            </li>
+          );
+        })}
+      </ul>
+    </div>,
     document.body
   ) : null;
 

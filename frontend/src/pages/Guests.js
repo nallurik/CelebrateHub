@@ -61,6 +61,33 @@ export default function Guests() {
   const cancel = () => { setEditing(null); setShowForm(false); };
 
   const importRef = useRef(null);
+
+  const downloadTemplate = async () => {
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'CelebrateHub';
+    const ws = wb.addWorksheet('Guests');
+    const headers = ['First Name', 'Last Name', 'Phone', 'Email', 'Type', 'Reference Person', 'Country', 'State', 'District', 'Village'];
+    const headerRow = ws.addRow(headers);
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6C5CE7' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    // Sample row
+    ws.addRow(['Ravi', 'Kumar', '9876543210', 'ravi@example.com', 'FAMILY', 'Reference Name', 'India', 'Telangana', 'Hyderabad', 'Banjara Hills']);
+    ws.addRow(['John', 'Smith', '2125551234', 'john@example.com', 'FRIEND', '', 'USA', 'New York', '', '']);
+    const widths = [14, 14, 14, 24, 12, 18, 10, 14, 14, 14];
+    widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+    const noteRow = ws.addRow(['']);
+    ws.addRow(['Note: Type must be one of: FAMILY, FRIEND, VIP, COLLEAGUE, OTHER. Phone is required (max 10 digits).']);
+    const noteCell = ws.getRow(ws.rowCount).getCell(1);
+    noteCell.font = { italic: true, color: { argb: 'FF636E72' } };
+    ws.mergeCells(ws.rowCount, 1, ws.rowCount, headers.length);
+    const { saveAs } = await import('file-saver');
+    const buf = await wb.xlsx.writeBuffer();
+    saveAs(new Blob([buf], { type: 'application/octet-stream' }), 'guests_import_template.xlsx');
+  };
+
   const handleImport = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -128,6 +155,9 @@ export default function Guests() {
   const typeCounts = {};
   guests.forEach((g) => { typeCounts[g.guestType] = (typeCounts[g.guestType] || 0) + 1; });
 
+  // Collect unique reference person names from existing guests
+  const refPersonSuggestions = [...new Set(guests.map(g => g.referencePerson).filter(Boolean))].sort();
+
   if (loading) return <p>Loading...</p>;
 
   return (
@@ -163,7 +193,7 @@ export default function Guests() {
       {showForm && (
         <div className="card">
           <h3>{editing ? '✏️ Edit Guest' : '🆕 New Guest'}</h3>
-          <GuestForm guest={editing} onSave={save} onCancel={cancel} />
+          <GuestForm guest={editing} onSave={save} onCancel={cancel} referencePersonSuggestions={refPersonSuggestions} />
         </div>
       )}
 
@@ -205,6 +235,7 @@ export default function Guests() {
         </button>
         <input type="file" accept=".xlsx,.xls" ref={importRef} style={{ display: 'none' }} onChange={handleImport} />
         <button className="btn btn-import" onClick={() => importRef.current?.click()}>📤 Import</button>
+        <button className="btn" title="Download sample template" onClick={downloadTemplate}>📄 Template</button>
         <button className="btn btn-primary" onClick={() => { setEditing(null); setShowForm(!showForm); }}>
           {showForm && !editing ? '✕ Close' : '+ Add Guest'}
         </button>

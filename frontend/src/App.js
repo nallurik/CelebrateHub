@@ -16,7 +16,7 @@ import CrewDashboard from './pages/CrewDashboard';
 
 export default function App() {
   const { user, logout } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
 
   if (!user) {
     return <Login />;

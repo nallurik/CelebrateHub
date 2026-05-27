@@ -10,6 +10,7 @@ export default function EventList() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -18,13 +19,13 @@ export default function EventList() {
 
   useEffect(() => { api.getEvents().then(setEvents).catch((err) => addToast(err.message)).finally(() => setLoading(false)); }, [addToast]);
 
-  const resetForm = () => { setName(''); setDate(''); setDescription(''); setLocation(''); };
+  const resetForm = () => { setName(''); setDate(''); setTime(''); setDescription(''); setLocation(''); };
 
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!name || !date) return;
     try {
-      const created = await api.createEvent({ name, date, description, location });
+      const created = await api.createEvent({ name, date, time, description, location });
       setEvents((prev) => [...prev, created]);
       resetForm();
       setShowForm(false);
@@ -57,12 +58,13 @@ export default function EventList() {
         <form className="card" onSubmit={handleCreate}>
           <h2>Create New Event</h2>
           <div className="form-row">
-            <label>Event Name <input placeholder="e.g. Son's Birthday" value={name} onChange={(e) => setName(e.target.value)} required /></label>
-            <label>Event Date <CustomDatePicker value={date} onChange={(e) => setDate(e.target.value)} required /></label>
+            <label><span>Event Name <span className="required">*</span></span><input placeholder="e.g. Son's Birthday" value={name} onChange={(e) => setName(e.target.value)} required /></label>
+            <label><span>Event Date <span className="required">*</span></span><CustomDatePicker value={date} onChange={(e) => setDate(e.target.value)} required /></label>
+            <label><span>Event Time</span><input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>
           </div>
           <div className="form-row">
-            <label>Location / Venue <input placeholder="Optional" value={location} onChange={(e) => setLocation(e.target.value)} /></label>
-            <label>Description <input placeholder="Optional" value={description} onChange={(e) => setDescription(e.target.value)} /></label>
+            <label><span>Location / Venue</span><input placeholder="Optional" value={location} onChange={(e) => setLocation(e.target.value)} /></label>
+            <label><span>Description</span><input placeholder="Optional" value={description} onChange={(e) => setDescription(e.target.value)} /></label>
           </div>
           <button type="submit" className="btn btn-primary" style={{ marginTop: 12 }}>Create Event</button>
         </form>
@@ -74,7 +76,7 @@ export default function EventList() {
         {events.map((ev) => (
           <div key={ev.id} className="card event-card">
             <h3>{ev.name}</h3>
-            <p className="muted">{ev.date}</p>
+            <p className="muted">{ev.date}{ev.time ? ` · ⏰ ${ev.time}` : ''}</p>
             {ev.location && <p>📍 {ev.location}</p>}
             {ev.description && <p>{ev.description}</p>}
             <div className="card-actions">

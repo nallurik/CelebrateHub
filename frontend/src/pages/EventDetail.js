@@ -18,8 +18,13 @@ const SCHED_EMPTY = { title: '', scheduleDate: '', startTime: '', endTime: '', d
 const EG_EMPTY = {
   guestId: '', adultsCount: 1, kidsCount: 0,
   needsTransport: false, pickupLocation: '', dropOffLocation: '', pickupDate: '', pickupTime: '', transportPeopleCount: 0,
+  transportStartDate: '', transportEndDate: '',
+  pickupTaskComplete: false, dropTaskComplete: false,
   needsAccommodation: false, accommodationFromDate: '', accommodationToDate: '',
   accommodationPlaceId: '', accommodationPlaceName: '',
+  accommodationTaskComplete: false,
+  attended: false,
+  invitationStatus: 'PENDING', invitationNotes: '',
   transportHelperId: '', transportHelperName: '',
   accommodationHelperId: '', accommodationHelperName: '',
   cookingHelperId: '', cookingHelperName: '',
@@ -61,6 +66,7 @@ export default function EventDetail() {
 
   // Guest tab search & pagination
   const [guestSearch, setGuestSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [guestPage, setGuestPage] = useState(1);
   const [guestPageSize, setGuestPageSize] = useState(10);
 
@@ -106,7 +112,9 @@ export default function EventDetail() {
   }, [egForm.needsAccommodation, egForm.accommodationFromDate, egForm.accommodationToDate]);
 
   // Helpers
-  const helpersByCategory = (cat) => helpers.filter((h) => h.category === cat && h.active !== false);
+  const helpersByCategory = (cat) => helpers.filter((h) => h.active !== false && (
+    (h.categories ? h.categories.split(',').map(c => c.trim()) : [h.category]).includes(cat)
+  ));
   const setField = (field) => (e) => {
     const val = e.target.type === 'checkbox' ? e.target.checked
               : e.target.type === 'number' ? Number(e.target.value)
@@ -123,6 +131,9 @@ export default function EventDetail() {
     const place = accommodationPlaces.find((p) => String(p.id) === pid);
     setEgForm((prev) => ({ ...prev, accommodationPlaceId: pid ? Number(pid) : '', accommodationPlaceName: place ? place.name : '' }));
   };
+
+  const dateMin = event?.date ? (() => { const d = new Date(event.date); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10); })() : undefined;
+  const dateMax = event?.date ? (() => { const d = new Date(event.date); d.setDate(d.getDate() + 7); return d.toISOString().slice(0, 10); })() : undefined;
 
   // Already-assigned guest IDs (to filter dropdown)
   const assignedGuestIds = new Set(eventGuests.map((eg) => eg.guest?.id));
@@ -141,9 +152,17 @@ export default function EventDetail() {
       dropOffLocation: eg.dropOffLocation || '',
       pickupDate: eg.pickupDate || '', pickupTime: eg.pickupTime || '',
       transportPeopleCount: eg.transportPeopleCount || 0,
+      transportStartDate: eg.transportStartDate || '',
+      transportEndDate: eg.transportEndDate || '',
+      pickupTaskComplete: eg.pickupTaskComplete || false,
+      dropTaskComplete: eg.dropTaskComplete || false,
       needsAccommodation: eg.needsAccommodation || false,
       accommodationFromDate: eg.accommodationFromDate || '', accommodationToDate: eg.accommodationToDate || '',
       accommodationPlaceId: eg.accommodationPlaceId || '', accommodationPlaceName: eg.accommodationPlaceName || '',
+      accommodationTaskComplete: eg.accommodationTaskComplete || false,
+      attended: eg.attended || false,
+      invitationStatus: eg.invitationStatus || 'PENDING',
+      invitationNotes: eg.invitationNotes || '',
       transportHelperId: eg.transportHelperId || '', transportHelperName: eg.transportHelperName || '',
       accommodationHelperId: eg.accommodationHelperId || '', accommodationHelperName: eg.accommodationHelperName || '',
       cookingHelperId: eg.cookingHelperId || '', cookingHelperName: eg.cookingHelperName || '',
@@ -246,7 +265,7 @@ export default function EventDetail() {
     <div>
       <Link to="/events" className="back-link">Back to Events</Link>
       <h1>{event.name}</h1>
-      <p className="muted">{event.date} {event.description && `— ${event.description}`}</p>
+      <p className="muted">{event.date}{event.time ? ` · ⏰ ${event.time}` : ''} {event.description && `— ${event.description}`}</p>
 
       {summary && <SummaryPanel summary={summary} />}
 
@@ -273,14 +292,15 @@ export default function EventDetail() {
                 <fieldset>
                   <legend>Select Guest</legend>
                   <div className="form-row">
-                    <label>Guest
+                    <label><span>Guest</span>
                       <CustomSelect
                         value={egForm.guestId}
                         onChange={setField('guestId')}
                         options={allGuests
                           .filter((g) => editingEg ? g.id === egForm.guestId : !assignedGuestIds.has(g.id))
                           .map((g) => ({ value: g.id, label: `${g.firstName} ${g.lastName} (${TYPE_LABELS[g.guestType] || g.guestType})` }))}
-                        placeholder="-- Choose a guest --"
+                        placeholder="-- Search or choose a guest --"
+                        searchable
                         required
                       />
                     </label>
@@ -299,6 +319,30 @@ export default function EventDetail() {
                   </div>
                 </fieldset>
 
+                {/* Invitation */}
+                <fieldset>
+                  <legend>📞 Invitation</legend>
+                  <div className="form-row">
+                    <label><span>Status</span>
+                      <select value={egForm.invitationStatus} onChange={setField('invitationStatus')} className="form-control">
+                        <option value="PENDING">⏳ Pending — Not yet called</option>
+                        <option value="CALLED">✅ Called — Reached &amp; confirmed</option>
+                        <option value="NO_ANSWER">📵 No Answer — Will try again</option>
+                        <option value="DECLINED">🚫 Declined — Cannot attend</option>
+                      </select>
+                    </label>
+                    <label><span>Notes</span>
+                      <textarea
+                        rows={2}
+                        value={egForm.invitationNotes}
+                        onChange={setField('invitationNotes')}
+                        placeholder="e.g. Called twice, no answer. Try again on Monday."
+                        style={{ resize: 'vertical', minHeight: 60 }}
+                      />
+                    </label>
+                  </div>
+                </fieldset>
+
                 {/* Transport */}
                 <fieldset>
                   <legend>Transportation</legend>
@@ -306,6 +350,7 @@ export default function EventDetail() {
                     <input type="checkbox" checked={egForm.needsTransport} onChange={setField('needsTransport')} /> Needs Transport
                   </label>
                   {egForm.needsTransport && (
+                    <>
                     <div className="form-row">
                       <label>Pickup Location
                         <select value={egForm.pickupLocation} onChange={setField('pickupLocation')} className="form-control">
@@ -326,10 +371,48 @@ export default function EventDetail() {
                           ))}
                         </select>
                       </label>
-                      <label>Pickup Date <CustomDatePicker value={egForm.pickupDate} onChange={setField('pickupDate')} name="pickupDate" /></label>
-                      <label>Pickup Time <input type="time" value={egForm.pickupTime} onChange={setField('pickupTime')} /></label>
-                      <label>People Count <input type="number" min="0" value={egForm.transportPeopleCount} onChange={setField('transportPeopleCount')} /></label>
                     </div>
+                    <div className="form-row">
+                      <label>Pickup Date
+                        <CustomDatePicker
+                          value={egForm.pickupDate}
+                          onChange={setField('pickupDate')}
+                          name="pickupDate"
+                          min={dateMin}
+                          max={dateMax}
+                        />
+                        <span className="phone-hint">±7 days from event date</span>
+                      </label>
+                      <label>Pickup Time <input type="time" value={egForm.pickupTime} onChange={setField('pickupTime')} /></label>
+                    </div>
+                    <div className="form-row">
+                      <label><span>Transport Start Date</span><CustomDatePicker value={egForm.transportStartDate} onChange={setField('transportStartDate')} name="transportStartDate" min={dateMin} max={dateMax} /><span className="phone-hint">±7 days from event date</span></label>
+                      <label><span>Transport End Date</span><CustomDatePicker value={egForm.transportEndDate} onChange={setField('transportEndDate')} name="transportEndDate" min={dateMin} max={dateMax} /><span className="phone-hint">±7 days from event date</span></label>
+                    </div>
+                    <div className="form-row">
+                      <label>
+                        Total People Count
+                        <input
+                          type="number"
+                          min="0"
+                          value={egForm.transportPeopleCount || (egForm.adultsCount + egForm.kidsCount)}
+                          onChange={setField('transportPeopleCount')}
+                          placeholder={`Default: ${egForm.adultsCount + egForm.kidsCount} (adults + kids)`}
+                        />
+                        <span className="phone-hint">Suggested: {egForm.adultsCount + egForm.kidsCount} (adults + kids)</span>
+                      </label>
+                    </div>
+                    <div className="form-row" style={{ gap: 24 }}>
+                      <label className="check-label">
+                        <input type="checkbox" checked={egForm.pickupTaskComplete} onChange={setField('pickupTaskComplete')} />
+                        <span style={{ marginLeft: 6 }}>✅ Pickup Complete</span>
+                      </label>
+                      <label className="check-label">
+                        <input type="checkbox" checked={egForm.dropTaskComplete} onChange={setField('dropTaskComplete')} />
+                        <span style={{ marginLeft: 6 }}>✅ Drop Complete</span>
+                      </label>
+                    </div>
+                    </>
                   )}
                 </fieldset>
 
@@ -341,9 +424,23 @@ export default function EventDetail() {
                   </label>
                   {egForm.needsAccommodation && (
                     <div className="form-row">
-                      <label>From Date <CustomDatePicker value={egForm.accommodationFromDate} onChange={setField('accommodationFromDate')} name="accommodationFromDate" /></label>
-                      <label>To Date <CustomDatePicker value={egForm.accommodationToDate} onChange={setField('accommodationToDate')} name="accommodationToDate" /></label>
-                      <label>Place
+                      <label><span>From Date <span className="required">*</span></span><CustomDatePicker value={egForm.accommodationFromDate} onChange={setField('accommodationFromDate')} name="accommodationFromDate" min={dateMin} max={dateMax} required /><span className="phone-hint">±7 days from event date</span></label>
+                      <label>
+                        <span>To Date <span className="required">*</span></span>
+                        <CustomDatePicker
+                          value={egForm.accommodationToDate}
+                          onChange={setField('accommodationToDate')}
+                          name="accommodationToDate"
+                          min={egForm.accommodationFromDate || dateMin}
+                          max={dateMax}
+                          required
+                        />
+                        <span className="phone-hint">±7 days from event date</span>
+                        {egForm.accommodationFromDate && egForm.accommodationToDate && egForm.accommodationToDate < egForm.accommodationFromDate && (
+                          <span className="phone-hint" style={{ color: 'var(--danger)' }}>To date must be on or after From date</span>
+                        )}
+                      </label>
+                      <label><span>Place <span className="required">*</span></span>
                         <CustomSelect
                           value={egForm.accommodationPlaceId || ''}
                           onChange={setPlace}
@@ -355,7 +452,12 @@ export default function EventDetail() {
                             return { value: p.id, label: `${p.name} (${PLACE_LABELS[p.type] || p.type.replace(/_/g, ' ')})${tag}`, disabled: full };
                           })}
                           placeholder="Select place"
+                          required
                         />
+                      </label>
+                      <label className="check-label" style={{ alignSelf: 'flex-end', paddingBottom: 8 }}>
+                        <input type="checkbox" checked={egForm.accommodationTaskComplete} onChange={setField('accommodationTaskComplete')} />
+                        <span style={{ marginLeft: 6 }}>✅ Accommodation Complete</span>
                       </label>
                     </div>
                   )}
@@ -405,6 +507,10 @@ export default function EventDetail() {
                 <div className="form-actions">
                   <button type="submit" className="btn btn-primary">{editingEg ? 'Update' : 'Assign'}</button>
                   <button type="button" className="btn" onClick={() => { setEditingEg(null); setShowForm(false); setEgForm(EG_EMPTY); }}>Cancel</button>
+                  <label className="check-label" style={{ marginLeft: 'auto' }}>
+                    <input type="checkbox" checked={egForm.attended} onChange={setField('attended')} />
+                    <span style={{ marginLeft: 6 }}>🎟️ Attended</span>
+                  </label>
                 </div>
               </form>
             )}
@@ -414,6 +520,18 @@ export default function EventDetail() {
           <h2>Guest List ({eventGuests.length})</h2>
           {eventGuests.length === 0 && <p className="muted">No guests assigned yet. Click "+ Assign Guest" to get started.</p>}
 
+          {(() => {
+            const q = guestSearch.toLowerCase();
+            const filtered = eventGuests.filter((eg) => {
+              const g = eg.guest || {};
+              const matchesText = !q || `${g.firstName} ${g.lastName} ${g.phone || ''} ${g.email || ''} ${g.guestType || ''} ${g.village || ''} ${g.district || ''} ${g.state || ''} ${g.referencePerson || ''}`.toLowerCase().includes(q);
+              const matchesStatus = !statusFilter || (eg.invitationStatus || 'PENDING') === statusFilter;
+              return matchesText && matchesStatus;
+            });
+            const totalPages = Math.ceil(filtered.length / guestPageSize);
+            const paginated = filtered.slice((guestPage - 1) * guestPageSize, guestPage * guestPageSize);
+            return (
+            <>
             <div className="guests-toolbar">
               <div className="guests-search-wrap">
                 <span className="guests-search-icon">🔍</span>
@@ -428,14 +546,7 @@ export default function EventDetail() {
                 )}
               </div>
               <span className="guests-count-badge">
-                {(() => {
-                  const q = guestSearch.toLowerCase();
-                  const cnt = q ? eventGuests.filter((eg) => {
-                    const g = eg.guest || {};
-                    return `${g.firstName} ${g.lastName} ${g.phone || ''} ${g.email || ''} ${g.guestType || ''} ${g.village || ''} ${g.district || ''} ${g.state || ''} ${g.referencePerson || ''}`.toLowerCase().includes(q);
-                  }).length : eventGuests.length;
-                  return `${cnt} of ${eventGuests.length} guest${eventGuests.length !== 1 ? 's' : ''}`;
-                })()}
+                {filtered.length} of {eventGuests.length} guest{eventGuests.length !== 1 ? 's' : ''}
               </span>
               {!showForm && !editingEg && (
                 <button className="btn btn-primary" onClick={startAssign}>+ Assign Guest</button>
@@ -464,38 +575,47 @@ export default function EventDetail() {
                     { label: 'Village', key: r => r.guest?.village || '', width: 14 },
                     { label: 'District', key: r => r.guest?.district || '', width: 14 },
                     { label: 'State', key: r => r.guest?.state || '', width: 14 },
+                    { label: 'Attended', key: r => r.attended ? 'Yes' : 'No', width: 10 },
+                    { label: 'Invite Status', key: r => r.invitationStatus || 'PENDING', width: 14 },
+                    { label: 'Invite Notes', key: r => r.invitationNotes || '', width: 24 },
+                    { label: 'Pickup Done', key: r => r.pickupTaskComplete ? 'Yes' : 'No', width: 12 },
+                    { label: 'Drop Done', key: r => r.dropTaskComplete ? 'Yes' : 'No', width: 12 },
                   ];
                   const name = (event?.name || 'event').replace(/[^a-zA-Z0-9]/g, '_');
-                  exportExcel(`${name}_guests.xlsx`, cols, eventGuests, {
+                  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                  const filterNote = statusFilter ? ` (${statusFilter})` : (q ? ' (filtered)' : '');
+                  exportExcel(`CelebrateHub_${name}_${today}.xlsx`, cols, filtered, {
                     sheetName: 'Guests',
-                    title: `${event?.name || 'Event'} — Guest List`,
+                    title: `${event?.name || 'Event'} — Guest List${filterNote}`,
                   });
-                }}>📥 Export</button>
+                }}>📥 Export ({filtered.length})</button>
               )}
             </div>
 
-          {(() => {
-            const q = guestSearch.toLowerCase();
-            const filtered = q ? eventGuests.filter((eg) => {
-              const g = eg.guest || {};
-              return `${g.firstName} ${g.lastName} ${g.phone || ''} ${g.email || ''} ${g.guestType || ''} ${g.village || ''} ${g.district || ''} ${g.state || ''} ${g.referencePerson || ''}`.toLowerCase().includes(q);
-            }) : eventGuests;
-            const totalPages = Math.ceil(filtered.length / guestPageSize);
-            const paginated = filtered.slice((guestPage - 1) * guestPageSize, guestPage * guestPageSize);
-            return filtered.length > 0 && (
-              <>
+            {/* Invitation status filter pills */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0 4px' }}>
+              {[{ value: '', label: 'All' }, { value: 'PENDING', label: '⏳ Pending' }, { value: 'CALLED', label: '✅ Called' }, { value: 'NO_ANSWER', label: '📵 No Answer' }, { value: 'DECLINED', label: '🚫 Declined' }].map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ fontWeight: statusFilter === value ? 700 : 400, background: statusFilter === value ? 'var(--primary-bg)' : 'var(--surface)', color: statusFilter === value ? 'var(--primary)' : 'var(--text-muted)', border: `1.5px solid ${statusFilter === value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 20, padding: '3px 12px' }}
+                  onClick={() => { setStatusFilter(value); setGuestPage(1); }}
+                >{label}</button>
+              ))}
+            </div>
           <div className="guest-table-wrap">
             <table className="guest-table">
               <colgroup>
-                <col style={{ width: '4%' }} />
-                <col style={{ width: '20%' }} />
-                <col style={{ width: '10%' }} />
+                <col style={{ width: 36 }} />
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '9%' }} />
+                <col style={{ width: '12%' }} />
                 <col style={{ width: '14%' }} />
-                <col style={{ width: '16%' }} />
                 <col style={{ width: '10%' }} />
-                <col style={{ width: '9%' }} />
-                <col style={{ width: '9%' }} />
-                <col style={{ width: '8%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '13%' }} />
+                <col style={{ width: 110 }} />
               </colgroup>
               <thead>
                 <tr>
@@ -531,7 +651,15 @@ export default function EventDetail() {
                         </div>
                       </td>
                       <td><span className={`badge badge-type-${(g.guestType || '').toLowerCase()}`}>{TYPE_LABELS[g.guestType] || g.guestType || '—'}</span></td>
-                      <td>{g.phone ? <span>📞 {g.phone}</span> : <span className="muted">—</span>}</td>
+                      <td>
+                        {g.phone ? <span>📞 {g.phone}</span> : <span className="muted">—</span>}
+                        {(() => {
+                          const st = eg.invitationStatus || 'PENDING';
+                          const badges = { CALLED: ['✅','var(--success,#16a34a)','var(--success-bg,#f0fdf4)'], NO_ANSWER: ['📵','#b45309','#fffbeb'], DECLINED: ['🚫','var(--danger)','var(--danger-bg,#fef2f2)'], PENDING: ['⏳','var(--text-muted)','var(--surface)'] };
+                          const [icon, color, bg] = badges[st] || badges.PENDING;
+                          return <span style={{ display: 'inline-block', marginLeft: 6, fontSize: '.72rem', background: bg, color, border: `1px solid ${color}`, borderRadius: 4, padding: '1px 5px' }}>{icon}</span>;
+                        })()}
+                      </td>
                       <td>{[g.village, g.district, g.state].filter(Boolean).length > 0 ? <span>📍 {[g.village, g.district, g.state].filter(Boolean).join(', ')}</span> : <span className="muted">—</span>}</td>
                       <td>{eg.adultsCount}A / {eg.kidsCount}K</td>
                       <td>
@@ -556,6 +684,7 @@ export default function EventDetail() {
                         <td colSpan="9">
                           <div className="guest-detail-panel">
                             <div className="guest-detail-grid">
+                              {/* ── Row 1: three small sections ── */}
                               <div className="guest-detail-section">
                                 <h4>👥 Head Count</h4>
                                 <div className="guest-detail-field"><span className="guest-detail-label">Adults</span><span className="guest-detail-value">{eg.adultsCount}</span></div>
@@ -563,16 +692,36 @@ export default function EventDetail() {
                                 <div className="guest-detail-field"><span className="guest-detail-label">Total</span><span className="guest-detail-value"><strong>{eg.adultsCount + eg.kidsCount}</strong></span></div>
                               </div>
                               <div className="guest-detail-section">
+                                <h4>📞 Invitation</h4>
+                                <div className="guest-detail-field"><span className="guest-detail-label">Status</span><span className="guest-detail-value">{{
+                                  CALLED: '✅ Called — Confirmed', NO_ANSWER: '📵 No Answer — Try again',
+                                  DECLINED: '🚫 Declined', PENDING: '⏳ Pending'
+                                }[eg.invitationStatus || 'PENDING'] || eg.invitationStatus}</span></div>
+                                {eg.invitationNotes && <div className="guest-detail-field"><span className="guest-detail-label">Notes</span><span className="guest-detail-value" style={{ whiteSpace: 'pre-wrap', textAlign: 'left' }}>{eg.invitationNotes}</span></div>}
+                              </div>
+                              <div className="guest-detail-section">
+                                <h4>🍽️ Helpers &amp; Attendance</h4>
+                                <div className="guest-detail-field"><span className="guest-detail-label">Cooking</span><span className="guest-detail-value">{eg.cookingHelperName || <em className="muted">—</em>}</span></div>
+                                <div className="guest-detail-field"><span className="guest-detail-label">Serving</span><span className="guest-detail-value">{eg.servingHelperName || <em className="muted">—</em>}</span></div>
+                                <div className="guest-detail-field"><span className="guest-detail-label">🎟️ Attended</span><span className="guest-detail-value">{eg.attended ? '✅ Yes' : '—'}</span></div>
+                              </div>
+
+                              {/* ── Row 2: Transport (wide) + Accommodation ── */}
+                              <div className="guest-detail-section guest-detail-section--wide">
                                 <h4>🚗 Transport</h4>
                                 {eg.needsTransport ? (
-                                  <>
+                                  <div className="guest-detail-fields-2col">
                                     <div className="guest-detail-field"><span className="guest-detail-label">Pickup Location</span><span className="guest-detail-value">{eg.pickupLocation || <em className="muted">Not set</em>}</span></div>
                                     <div className="guest-detail-field"><span className="guest-detail-label">Drop-off Location</span><span className="guest-detail-value">{eg.dropOffLocation || <em className="muted">Not set</em>}</span></div>
                                     <div className="guest-detail-field"><span className="guest-detail-label">Pickup Date</span><span className="guest-detail-value">{eg.pickupDate || <em className="muted">Not set</em>}</span></div>
                                     <div className="guest-detail-field"><span className="guest-detail-label">Pickup Time</span><span className="guest-detail-value">{eg.pickupTime || <em className="muted">Not set</em>}</span></div>
+                                    <div className="guest-detail-field"><span className="guest-detail-label">Start Date</span><span className="guest-detail-value">{eg.transportStartDate || <em className="muted">—</em>}</span></div>
+                                    <div className="guest-detail-field"><span className="guest-detail-label">End Date</span><span className="guest-detail-value">{eg.transportEndDate || <em className="muted">—</em>}</span></div>
                                     <div className="guest-detail-field"><span className="guest-detail-label">People Count</span><span className="guest-detail-value">{eg.transportPeopleCount}</span></div>
-                                    <div className="guest-detail-field"><span className="guest-detail-label">Transport Helper</span><span className="guest-detail-value">{eg.transportHelperName || <em className="muted">Not assigned</em>}</span></div>
-                                  </>
+                                    <div className="guest-detail-field"><span className="guest-detail-label">Helper</span><span className="guest-detail-value">{eg.transportHelperName || <em className="muted">Not assigned</em>}</span></div>
+                                    <div className="guest-detail-field"><span className="guest-detail-label">Pickup Task</span><span className="guest-detail-value">{eg.pickupTaskComplete ? '✅ Done' : '⏳ Pending'}</span></div>
+                                    <div className="guest-detail-field"><span className="guest-detail-label">Drop Task</span><span className="guest-detail-value">{eg.dropTaskComplete ? '✅ Done' : '⏳ Pending'}</span></div>
+                                  </div>
                                 ) : <p className="muted" style={{ fontSize: '.85rem' }}>Not required</p>}
                               </div>
                               <div className="guest-detail-section">
@@ -582,14 +731,10 @@ export default function EventDetail() {
                                     <div className="guest-detail-field"><span className="guest-detail-label">Place</span><span className="guest-detail-value">{eg.accommodationPlaceName || <em className="muted">TBD</em>}</span></div>
                                     <div className="guest-detail-field"><span className="guest-detail-label">From</span><span className="guest-detail-value">{eg.accommodationFromDate || <em className="muted">Not set</em>}</span></div>
                                     <div className="guest-detail-field"><span className="guest-detail-label">To</span><span className="guest-detail-value">{eg.accommodationToDate || <em className="muted">Not set</em>}</span></div>
-                                    <div className="guest-detail-field"><span className="guest-detail-label">Accommodation Helper</span><span className="guest-detail-value">{eg.accommodationHelperName || <em className="muted">Not assigned</em>}</span></div>
+                                    <div className="guest-detail-field"><span className="guest-detail-label">Helper</span><span className="guest-detail-value">{eg.accommodationHelperName || <em className="muted">Not assigned</em>}</span></div>
+                                    <div className="guest-detail-field"><span className="guest-detail-label">Task</span><span className="guest-detail-value">{eg.accommodationTaskComplete ? '✅ Done' : '⏳ Pending'}</span></div>
                                   </>
                                 ) : <p className="muted" style={{ fontSize: '.85rem' }}>Not required</p>}
-                              </div>
-                              <div className="guest-detail-section">
-                                <h4>🍽️ Helpers</h4>
-                                <div className="guest-detail-field"><span className="guest-detail-label">Cooking</span><span className="guest-detail-value">{eg.cookingHelperName || <em className="muted">Not assigned</em>}</span></div>
-                                <div className="guest-detail-field"><span className="guest-detail-label">Serving</span><span className="guest-detail-value">{eg.servingHelperName || <em className="muted">Not assigned</em>}</span></div>
                               </div>
                             </div>
                             <div className="guest-detail-actions">
@@ -776,7 +921,14 @@ export default function EventDetail() {
                   <div key={eg.id} className="card meal-card">
                     <div className="card-toggle-header" onClick={() => {
                       if (mealEgId === eg.id) { setMealEgId(null); }
-                      else { setMealEgId(eg.id); loadMeals(eg.id); }
+                      else {
+                        setMealEgId(eg.id);
+                        loadMeals(eg.id);
+                        // Auto-fill meal date from arrival date
+                        const arrivalDate = eg.accommodationFromDate || '';
+                        setMealForm({ ...MEAL_EMPTY, mealDate: arrivalDate });
+                        setEditingMeal(null);
+                      }
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div className="guest-avatar" style={{ width: 32, height: 32, fontSize: '.7rem' }}>{(g.firstName || '?')[0]}{(g.lastName || '?')[0]}</div>
@@ -793,6 +945,11 @@ export default function EventDetail() {
 
                     {mealEgId === eg.id && (
                       <div style={{ marginTop: 12 }}>
+                        {eg.accommodationFromDate && (
+                          <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', marginBottom: 8 }}>
+                            🏠 Stay: <strong>{eg.accommodationFromDate}</strong> → <strong>{eg.accommodationToDate || '?'}</strong> · meal dates restricted to this range
+                          </div>
+                        )}
                         {(mealsByEg[eg.id] || []).length > 0 && (
                           <table className="guest-table" style={{ marginBottom: 12 }}>
                             <thead>
@@ -829,7 +986,15 @@ export default function EventDetail() {
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
                             <div style={{ width: 180, flexShrink: 0 }}>
-                              <CustomDatePicker value={mealForm.mealDate} onChange={(e) => setMealForm((p) => ({ ...p, mealDate: e.target.value }))} placeholder="Select date" required />
+                              <CustomDatePicker
+                                value={mealForm.mealDate}
+                                onChange={(e) => setMealForm((p) => ({ ...p, mealDate: e.target.value }))}
+                                placeholder="Select date"
+                                required
+                                min={eg.accommodationFromDate || undefined}
+                                max={eg.accommodationToDate || undefined}
+                              />
+                              {eg.accommodationFromDate && <span className="phone-hint">{eg.accommodationFromDate} → {eg.accommodationToDate || '?'}</span>}
                             </div>
                             <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
                               <label className="check-label"><input type="checkbox" checked={mealForm.breakfast} onChange={(e) => setMealForm((p) => ({ ...p, breakfast: e.target.checked }))} /> 🌅 Breakfast</label>

@@ -38,8 +38,12 @@ public class HelperController {
 
     @PostMapping
     public Helper create(@Valid @RequestBody Helper helper) {
+        // sync primary category from categories if provided
+        if (helper.getCategories() != null && !helper.getCategories().isEmpty()) {
+            helper.setCategory(helper.getCategories().split(",")[0].trim());
+        }
         Helper saved = repo.save(helper);
-        activityLog.log("CREATE", "Helper", saved.getId(), saved.getFullName(), "Category: " + saved.getCategory());
+        activityLog.log("CREATE", "Helper", saved.getId(), saved.getFullName(), "Categories: " + saved.getCategories());
         return saved;
     }
 
@@ -59,6 +63,7 @@ public class HelperController {
             existing.setLastName(body.getLastName());
             existing.setPhone(body.getPhone());
             existing.setRole(body.getRole());
+            existing.setCategories(body.getCategories() != null ? body.getCategories() : body.getCategory());
             existing.setCategory(body.getCategory());
             existing.setActive(body.isActive());
             if (body.getPassword() != null && !body.getPassword().isEmpty()) {

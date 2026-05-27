@@ -69,7 +69,7 @@ export async function exportExcel(filename, columns, rows, opts = {}) {
   // --- Data rows ---
   rows.forEach((row, idx) => {
     const values = columns.map((c) => {
-      const val = typeof c.key === 'function' ? c.key(row) : row[c.key];
+      const val = typeof c.key === 'function' ? c.key(row, idx) : row[c.key];
       return val == null ? '' : val;
     });
     const dRow = ws.addRow(values);

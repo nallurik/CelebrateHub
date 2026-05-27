@@ -21,6 +21,7 @@ export default function DropOffLocations() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedId, setSelectedId] = useState(null);
+  const [phoneError, setPhoneError] = useState('');
   const { addToast } = useToast();
 
   const load = () => {
@@ -42,8 +43,16 @@ export default function DropOffLocations() {
   const totalPages = Math.ceil(filtered.length / pageSize);
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
+  const handlePhoneChange = (e) => {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setForm((prev) => ({ ...prev, contactPhone: val }));
+    if (val.length > 0 && val.length < 10) setPhoneError('Phone must be 10 digits');
+    else setPhoneError('');
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
+    if (form.contactPhone && form.contactPhone.length !== 10) { setPhoneError('Phone must be exactly 10 digits'); return; }
     try {
       if (editing) {
         await api.updateDropOffLocation(editing.id, form);
@@ -53,6 +62,7 @@ export default function DropOffLocations() {
       setShowForm(false);
       setEditing(null);
       setForm(EMPTY);
+      setPhoneError('');
       addToast(editing ? 'Location updated' : 'Location added', 'success');
       load();
     } catch (err) { addToast(err.message); }
@@ -61,6 +71,7 @@ export default function DropOffLocations() {
   const startEdit = (loc) => {
     setEditing(loc);
     setForm({ name: loc.name || '', locationType: loc.locationType || 'GENERAL', address: loc.address || '', contactPerson: loc.contactPerson || '', contactPhone: loc.contactPhone || '', notes: loc.notes || '' });
+    setPhoneError('');
     setShowForm(true);
   };
 
@@ -113,7 +124,14 @@ export default function DropOffLocations() {
               </div>
               <div className="form-row">
                 <label>Contact Person <input className="form-control" value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} /></label>
-                <label>Contact Phone <input className="form-control" value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} /></label>
+                <label>Contact Phone
+                  <input className="form-control" value={form.contactPhone} inputMode="numeric" maxLength={10}
+                    onChange={handlePhoneChange}
+                    placeholder="10 digits" />
+                  {phoneError
+                    ? <span className="phone-hint" style={{ color: 'var(--danger)' }}>{phoneError}</span>
+                    : <span className="phone-hint">Digits only, max 10</span>}
+                </label>
               </div>
               <div className="form-row">
                 <label>Notes <textarea className="form-control" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} /></label>
@@ -121,7 +139,7 @@ export default function DropOffLocations() {
             </fieldset>
             <div className="form-actions">
               <button type="submit" className="btn btn-primary">{editing ? 'Update' : 'Add Location'}</button>
-              <button type="button" className="btn" onClick={() => { setShowForm(false); setEditing(null); setForm(EMPTY); }}>Cancel</button>
+              <button type="button" className="btn" onClick={() => { setShowForm(false); setEditing(null); setForm(EMPTY); setPhoneError(''); }}>Cancel</button>
             </div>
           </form>
         </div>
